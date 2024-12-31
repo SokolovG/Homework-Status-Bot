@@ -1,6 +1,5 @@
 import os
 import time
-from http import HTTPStatus
 
 from dotenv import load_dotenv
 
@@ -10,11 +9,8 @@ PRACTICUM_TOKEN = os.getenv('TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 RETRY_PERIOD = 600
-timestamp = 1730451600
-# timestamp = int(time.time())
+
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
-NOT_FOUND = HTTPStatus.NOT_FOUND
-OK = HTTPStatus.OK
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 HOMEWORK_VERDICTS = {
