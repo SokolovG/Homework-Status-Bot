@@ -2,16 +2,22 @@ class HttpStatusNotOkError(Exception):
     pass
 
 class TokenNoFound(Exception):
-    """Класс для описания отсутствия необходимых токенов."""
+    """Class to describe the absence of necessary tokens."""
 
 class NotDictTypeData(TypeError):
-    """Класс для описания отсутствия необходимых токенов."""
+    """Class responsible for handling errors when the data type is not a dictionary."""
 
 class NotListTypeData(TypeError):
-    """Класс для описания отсутствия необходимых токенов."""
+    """Class responsible for handling errors when the data type is not a list."""
 
-class KeyNotFound(Exception):
-    """Класс для описания отсутствия необходимых токенов."""
+class KeyNotFound(KeyError):
+    """Class responsible for handling errors when the key is not found."""
 
-class ListIsEmpty(Exception):
-    """Класс для описания отсутствия необходимых токенов."""
+class ApiError(Exception):
+    """Class responsible for handling errors related to API issues."""
+
+class JsonError(Exception):
+    """Class responsible for handling errors when the data is not in JSON format."""
+
+class UnknownHomework(ValueError):
+    """Class responsible for handling errors when the homework status is unknown."""
