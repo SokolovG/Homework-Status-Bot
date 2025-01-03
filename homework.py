@@ -4,26 +4,25 @@ import time
 from http import HTTPStatus
 
 import requests
-from telebot import TeleBot
+from telebot import TeleBot, apihelper
 
 from constants import (
     PRACTICUM_TOKEN,
     TELEGRAM_CHAT_ID,
     TELEGRAM_TOKEN,
     RETRY_PERIOD,
-    HEADERS,
     HOMEWORK_VERDICTS,
     ENDPOINT,
+    HEADERS
 )
 from exceptions import (
     HttpStatusNotOkError,
-    TokenNoFound,
-    NotDictTypeData,
-    NotListTypeData,
-    KeyNotFound,
-    ApiError,
-    JsonError,
-    UnknownHomework
+    NotDictTypeDataError,
+    NotListTypeDataError,
+    KeyNotFoundError,
+    ApiConnectionError,
+    JsonTypeError,
+    UnknownHomeworkError
 )
 
 
@@ -37,7 +36,6 @@ formatter = logging.Formatter(
     '%(asctime)s - %(levelname)s - %(message)s'
 )
 handler.setFormatter(formatter)
-# Add handler.
 logger.addHandler(handler)
 
 
@@ -50,10 +48,7 @@ def check_tokens():
                 'A required environment variable is missing.: '
                 f'{key}'
             )
-            raise TokenNoFound(
-                'A required environment variable is missing.: '
-                f'{key}'
-            )
+            sys.exit(1)
 
 
 def send_message(bot, message):
@@ -61,34 +56,36 @@ def send_message(bot, message):
     try:
         logger.debug('Start of message sending')
         bot.send_message(TELEGRAM_CHAT_ID, message)
-    except Exception as error:
+    except apihelper.ApiException as error:
         logger.error(f'Error while sending the message: {error}')
+    except requests.exceptions.RequestException as requests_error:
+        logger.error(f'Requests library error: {requests_error}')
+    except Exception as global_error:
+        logger.error(f'Error while sending the message: {global_error}')
     else:
         logger.debug('Message sent successfully')
 
 
 def get_api_answer(timestamp):
     """The function is responsible for retrieving information from the API."""
-    PARAMS = {'from_date': timestamp}
+    data = {'params': {'from_date': timestamp},
+            'headers': HEADERS, 'url': ENDPOINT}
     try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params=PARAMS)
+        response = requests.get(**data)
 
     except requests.RequestException as error:
-        logger.error(f'Error while making a request to the API: {error}.'
-                     f' URL: {ENDPOINT}, params: {PARAMS}')
-        raise ApiError('Error while making a request to the API')
+        raise ApiConnectionError(f'Error {error} while making'
+                                 f'a request to the API: {error}')
 
     try:
         data = response.json()
     except ValueError as error:
-        logger.error('JSON decoding error:'
-                     f'{error}. Answer: {response.text}')
-        raise JsonError('Answer is not in JSON format.')
+        raise JsonTypeError('JSON decoding error:'
+                            f'{error}. Answer: {response.text}')
 
     if response.status_code != HTTPStatus.OK:
-        logger.critical('Error while making a request to the API:'
-                        f'{requests.status_codes}')
-        raise HttpStatusNotOkError('Received HTTP status other than 200.')
+        raise HttpStatusNotOkError('Error while making a request to the API:'
+                                   f'{requests.status_codes}')
 
     logger.debug('The function get_api_answer executed successfully.')
     return data
@@ -97,20 +94,22 @@ def get_api_answer(timestamp):
 def check_response(response):
     """Checks that the API response matches the expected structure."""
     if not isinstance(response, dict):
-        logger.error('The API response must be a dictionary.')
-        raise NotDictTypeData('The API response must be a dictionary.')
+        raise NotDictTypeDataError('The API response must'
+                                   f' be a dictionary, now: {type(response)}')
 
     if 'homeworks' not in response:
-        logger.error('The API response is missing the key "homeworks".')
-        raise KeyNotFound('The API response is missing the key "homeworks".')
+        raise KeyNotFoundError('The API response is'
+                               ' missing the key "homeworks".')
 
     if not isinstance(response['homeworks'], list):
-        logger.error('The key "homeworks" must contain a list.')
-        raise NotListTypeData('The key "homeworks" must contain a list.')
+        homework = response['homeworks']
+        raise NotListTypeDataError(f'The key "homeworks"'
+                                   ' must contain a list,'
+                                   f' now: {type(homework)}')
 
     if 'current_date' not in response:
-        logger.error('The API response is missing the key ‘current_date.')
-        raise KeyNotFound('The API response is missing the key ‘current_date.')
+        raise KeyNotFoundError('The API response is'
+                               ' missing the key ‘current_date.')
 
     if len(response['homeworks']) == 0:
         return False
@@ -123,19 +122,23 @@ def check_response(response):
 def parse_status(homework):
     """A function to generate a string with the homework check status."""
     if not isinstance(homework, dict):
-        raise NotDictTypeData('The argument ‘homework’ must be a dictionary.')
+        raise NotDictTypeDataError('The argument ‘homework’'
+                                   ' must be a dictionary,'
+                                   f' now: {type(homework)}')
 
     if 'homework_name' not in homework:
-        raise KeyNotFound('The API response is missing the key "homeworks".')
+        raise KeyNotFoundError('The API response'
+                               'is missing the key "homeworks".')
 
     if 'status' not in homework:
-        raise KeyNotFound('The API response is missing the key "status".')
+        raise KeyNotFoundError('The API response is missing the key "status".')
 
     homework_name = homework['homework_name']
     homework_status = homework['status']
 
     if homework_status not in HOMEWORK_VERDICTS:
-        raise UnknownHomework(f'Unknown homework status: {homework_status}')
+        raise UnknownHomeworkError('Unknown homework status:'
+                                   f' {homework_status}')
 
     verdict = HOMEWORK_VERDICTS[homework_status]
     return f'Изменился статус проверки работы "{homework_name}": {verdict}'
@@ -156,8 +159,7 @@ def main():
             response = get_api_answer(timestamp)
             if not check_response(response):
                 logger.debug('The ‘homeworks’ list is empty.')
-                send_message(bot, 'You have no homework.')
-                time.sleep(RETRY_PERIOD)
+                return
 
             homework = check_response(response)
             message = parse_status(homework)
