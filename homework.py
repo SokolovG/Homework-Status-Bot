@@ -153,7 +153,7 @@ def main():
     """The main logic of the bot’s operation."""
     check_tokens()  # Checking for the presence of tokens
     bot = TeleBot(token=TELEGRAM_TOKEN)  # Bot creating.
-    timestamp = 1730742985
+    timestamp = int(time.time())
     previous_message = None
     previous_error_message = None
     response = get_api_answer(timestamp)
