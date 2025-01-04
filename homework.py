@@ -22,7 +22,8 @@ from exceptions import (
     KeyNotFoundError,
     ApiConnectionError,
     JsonTypeError,
-    UnknownHomeworkError
+    UnknownHomeworkError,
+    UnknownTelegramError
 )
 
 
@@ -58,12 +59,16 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except apihelper.ApiException as error:
         logger.error(f'Error while sending the message: {error}')
+        return False
     except requests.exceptions.RequestException as requests_error:
         logger.error(f'Requests library error: {requests_error}')
+        return False
     except Exception as global_error:
         logger.error(f'Error while sending the message: {global_error}')
+        return False
     else:
         logger.debug('Message sent successfully')
+        return True
 
 
 def get_api_answer(timestamp):
@@ -77,15 +82,15 @@ def get_api_answer(timestamp):
         raise ApiConnectionError(f'Error {error} while making'
                                  f'a request to the API: {error}')
 
+    if response.status_code != HTTPStatus.OK:
+        raise HttpStatusNotOkError('Error while making a request to the API:'
+                                   f'{requests.status_codes}')
+
     try:
         data = response.json()
     except ValueError as error:
         raise JsonTypeError('JSON decoding error:'
                             f'{error}. Answer: {response.text}')
-
-    if response.status_code != HTTPStatus.OK:
-        raise HttpStatusNotOkError('Error while making a request to the API:'
-                                   f'{requests.status_codes}')
 
     logger.debug('The function get_api_answer executed successfully.')
     return data
@@ -148,7 +153,7 @@ def main():
     """The main logic of the bot’s operation."""
     check_tokens()  # Checking for the presence of tokens
     bot = TeleBot(token=TELEGRAM_TOKEN)  # Bot creating.
-    timestamp = int(time.time())
+    timestamp = 1730742985
     previous_message = None
     previous_error_message = None
     response = get_api_answer(timestamp)
@@ -163,9 +168,12 @@ def main():
 
             homework = check_response(response)
             message = parse_status(homework)
-
             if message != previous_message:
-                send_message(bot, message)
+                if send_message(bot, message):
+                    continue
+                else:
+                    raise UnknownTelegramError('Unknown Telegram error.'
+                                               'Sorry, please wait.')
                 previous_message = message
                 timestamp = response.get('current_date', timestamp)
 
