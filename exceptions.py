@@ -18,6 +18,3 @@ class JsonTypeError(Exception):
 
 class UnknownHomeworkError(ValueError):
     """Class responsible for handling errors when the homework status is unknown."""
-
-class UnknownTelegramError(Exception):
-    """Class responsible for unknown Telegram Error."""

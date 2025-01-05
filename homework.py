@@ -23,7 +23,6 @@ from exceptions import (
     ApiConnectionError,
     JsonTypeError,
     UnknownHomeworkError,
-    UnknownTelegramError
 )
 
 
@@ -149,10 +148,25 @@ def parse_status(homework):
     return f'Изменился статус проверки работы "{homework_name}": {verdict}'
 
 
+def process_response(response, previous_message, bot):
+    """Response checking."""
+    if not check_response(response):
+        logger.debug('The ‘homeworks’ list is empty.')
+        return None, None
+
+    homework = check_response(response)
+    message = parse_status(homework)
+
+    if message != previous_message:
+        if send_message(bot, message):
+            return message, response.get('current_date')
+    return previous_message, None
+
+
 def main():
     """The main logic of the bot’s operation."""
-    check_tokens()  # Checking for the presence of tokens
-    bot = TeleBot(token=TELEGRAM_TOKEN)  # Bot creating.
+    check_tokens()
+    bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     previous_message = None
     previous_error_message = None
@@ -162,28 +176,18 @@ def main():
         try:
 
             response = get_api_answer(timestamp)
-            if not check_response(response):
-                logger.debug('The ‘homeworks’ list is empty.')
-                return
-
-            homework = check_response(response)
-            message = parse_status(homework)
-            if message != previous_message:
-                if send_message(bot, message):
-                    continue
-                else:
-                    raise UnknownTelegramError('Unknown Telegram error.'
-                                               'Sorry, please wait.')
-                previous_message = message
-                timestamp = response.get('current_date', timestamp)
+            previous_message, new_timestamp = (
+                process_response(response, previous_message, bot))
 
         except Exception as error:
             error_message = f'Program error: {error}'
             logger.error(error_message)
             if error_message != previous_error_message:
                 try:
-                    send_message(bot, error_message)
-                    previous_error_message = error_message
+                    if send_message(bot, error_message):
+                        previous_error_message = error_message
+
+                        previous_error_message = error_message
                 except Exception as telegram_error:
                     logger.error(
                         'Error while sending error message to Telegram:'
